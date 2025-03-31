@@ -329,7 +329,7 @@
 
     // Geçmiş İşlemleri
     function loadDownloadHistory() {
-        const history = JSON.parse(localStorage.getItem('downloadHistory') || [];
+        const history = JSON.parse(localStorage.getItem('downloadHistory')) || [];
         historyList.innerHTML = history.map(item => `
             <div class="history-item">
                 <span class="history-title">${item.title}</span>
@@ -340,7 +340,7 @@
     }
 
     function addToHistory(filename, title) {
-        const history = JSON.parse(localStorage.getItem('downloadHistory') || [];
+        const history = JSON.parse(localStorage.getItem('downloadHistory')) || [];
         
         history.unshift({
             filename: filename,
