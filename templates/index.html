@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube İndirici</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #ff0000;
+            --secondary: #282828;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --error: #dc3545;
+            --success: #28a745;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--light);
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 10px;
+        }
+        
+        .content {
+            padding: 20px;
+        }
+        
+        .input-group {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        
+        input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        .video-info {
+            margin-bottom: 20px;
+        }
+        
+        .thumbnail {
+            max-width: 100%;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .format {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin: 5px 0;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        
+        .download-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        
+        .history {
+            margin-top: 30px;
+        }
+        
+        .history-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #f0f0f0;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="https://www.youtube.com/img/desktop/yt_1200.png" class="logo" alt="YouTube">
+            <h1>YouTube İndirici</h1>
+        </header>
+        
+        <div class="content">
+            <div class="input-group">
+                <input type="text" id="urlInput" placeholder="YouTube URL'si girin...">
+                <button id="searchBtn"><i class="fas fa-search"></i> Ara</button>
+            </div>
+            
+            <div id="result"></div>
+            <div class="history">
+                <h3>İndirme Geçmişi</h3>
+                <div id="historyList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const urlInput = document.getElementById('urlInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const resultDiv = document.getElementById('result');
+        const historyList = document.getElementById('historyList');
+        
+        // Video bilgilerini getir
+        searchBtn.addEventListener('click', async () => {
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showError('Lütfen bir URL girin');
+                return;
+            }
+            
+            try {
+                showLoading();
+                
+                const response = await fetch('/api/info', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Bir hata oluştu');
+                }
+                
+                showVideoInfo(data);
+            } catch (error) {
+                showError(error.message);
+            }
+        });
+        
+        // Video bilgilerini göster
+        function showVideoInfo(info) {
+            resultDiv.innerHTML = `
+                <div class="video-info">
+                    <h2>${info.title}</h2>
+                    <p>Kanal: ${info.channel}</p>
+                    ${info.thumbnail ? `<img src="${info.thumbnail}" class="thumbnail">` : ''}
+                    
+                    <h3>Format Seçenekleri</h3>
+                    ${info.formats.map(format => `
+                        <div class="format">
+                            <span>${format.res} (${format.ext})</span>
+                            <button class="download-btn" 
+                                    onclick="download('${format.id}', 'video')">
+                                <i class="fas fa-download"></i> İndir
+                            </button>
+                        </div>
+                    `).join('')}
+                    
+                    <div class="format">
+                        <span>MP3 (Ses)</span>
+                        <button class="download-btn" onclick="download('', 'audio')">
+                            <i class="fas fa-download"></i> İndir
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // İndirme işlemi
+        async function download(formatId, type) {
+            const url = urlInput.value.trim();
+            
+            try {
+                showLoading('İndiriliyor...');
+                
+                const response = await fetch('/api/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        url,
+                        type,
+                        format_id: formatId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'İndirme başarısız');
+                }
+                
+                // Dosyayı indir
+                const a = document.createElement('a');
+                a.href = `/downloads/${encodeURIComponent(data.filename)}`;
+                a.download = data.filename;
+                a.click();
+                
+                // Geçmişe ekle
+                addToHistory(data.filename);
+                
+                showMessage('İndirme başarılı!');
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+        
+        // Yardımcı fonksiyonlar
+        function showLoading(message = 'Yükleniyor...') {
+            resultDiv.innerHTML = `<p><i class="fas fa-spinner fa-spin"></i> ${message}</p>`;
+        }
+        
+        function showError(message) {
+            resultDiv.innerHTML = `
+                <div style="color: var(--error); padding: 10px; background: #f8d7da; border-radius: 4px;">
+                    <i class="fas fa-exclamation-circle"></i> ${message}
+                </div>
+            `;
+        }
+        
+        function showMessage(message) {
+            resultDiv.innerHTML = `
+                <div style="color: var(--success); padding: 10px; background: #d4edda; border-radius: 4px;">
+                    <i class="fas fa-check-circle"></i> ${message}
+                </div>
+            `;
+        }
+        
+        function addToHistory(filename) {
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.textContent = filename;
+            historyList.prepend(item);
+        }
+    </script>
+</body>
+</html>
