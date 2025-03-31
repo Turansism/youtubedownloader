@@ -6,9 +6,8 @@ import re
 from datetime import datetime
 
 # Flask uygulamasını oluştur
-app = Flask(__name__, static_folder=None)  # static_folder=None önemli
+app = Flask(__name__)
 CORS(app)
-
 
 # Yapılandırmalar
 app.config['DOWNLOAD_FOLDER'] = os.path.join(os.getcwd(), 'downloads')
