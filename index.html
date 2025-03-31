@@ -133,139 +133,230 @@
     </div>
 
     <script>
-        const urlInput = document.getElementById('urlInput');
-        const searchBtn = document.getElementById('searchBtn');
-        const resultDiv = document.getElementById('result');
-        const historyList = document.getElementById('historyList');
+       document.addEventListener('DOMContentLoaded', function() {
+    // DOM Elementleri
+    const urlInput = document.getElementById('urlInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const resultDiv = document.getElementById('result');
+    const historyList = document.getElementById('historyList');
+    
+    // Global değişkenler
+    let currentVideoInfo = null;
+    const MAX_HISTORY_ITEMS = 10;
+
+    // Event Listeners
+    searchBtn.addEventListener('click', handleSearch);
+    urlInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') handleSearch();
+    });
+
+    // İlk yüklemede geçmişi göster
+    loadDownloadHistory();
+
+    // Fonksiyonlar
+    async function handleSearch() {
+        const url = urlInput.value.trim();
         
-        // Video bilgilerini getir
-        searchBtn.addEventListener('click', async () => {
-            const url = urlInput.value.trim();
+        if (!url) {
+            showError('Lütfen bir YouTube URL\'si girin');
+            return;
+        }
+
+        try {
+            showLoading('Video bilgileri alınıyor...');
             
-            if (!url) {
-                showError('Lütfen bir URL girin');
-                return;
-            }
+            const info = await getVideoInfo(url);
+            currentVideoInfo = {
+                url: url,
+                title: info.title,
+                channel: info.channel,
+                duration: info.duration
+            };
             
-            try {
-                showLoading();
-                
-                const response = await fetch('/api/info', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ url })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || 'Bir hata oluştu');
-                }
-                
-                showVideoInfo(data);
-            } catch (error) {
-                showError(error.message);
+            displayVideoInfo(info);
+        } catch (error) {
+            showError(error.message);
+        } finally {
+            hideLoading();
+        }
+    }
+
+    async function getVideoInfo(url) {
+        try {
+            const response = await fetch('/api/info', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ url: url })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Bilinmeyen hata');
             }
-        });
-        
-        // Video bilgilerini göster
-        function showVideoInfo(info) {
-            resultDiv.innerHTML = `
-                <div class="video-info">
-                    <h2>${info.title}</h2>
-                    <p>Kanal: ${info.channel}</p>
-                    ${info.thumbnail ? `<img src="${info.thumbnail}" class="thumbnail">` : ''}
-                    
-                    <h3>Format Seçenekleri</h3>
+
+            return await response.json();
+        } catch (error) {
+            console.error('API Hatası:', error);
+            throw new Error('Video bilgileri alınamadı: ' + error.message);
+        }
+    }
+
+    function displayVideoInfo(info) {
+        resultDiv.innerHTML = `
+            <div class="video-info">
+                <h2>${info.title}</h2>
+                <p>Kanal: ${info.channel}</p>
+                <p>Süre: ${formatDuration(info.duration)}</p>
+                ${info.thumbnail ? `<img src="${info.thumbnail}" class="thumbnail" alt="Video thumbnail">` : ''}
+                
+                <div class="formats-container">
+                    <h3>Video Formatları</h3>
                     ${info.formats.map(format => `
                         <div class="format">
-                            <span>${format.res} (${format.ext})</span>
+                            <span>${format.res || 'Standart'} - ${format.ext.toUpperCase()} ${format.note ? `(${format.note})` : ''}</span>
                             <button class="download-btn" 
-                                    onclick="download('${format.id}', 'video')">
+                                    onclick="downloadVideo('${format.id}', 'video')">
                                 <i class="fas fa-download"></i> İndir
                             </button>
                         </div>
                     `).join('')}
                     
+                    <h3>Ses Formatı</h3>
                     <div class="format">
-                        <span>MP3 (Ses)</span>
-                        <button class="download-btn" onclick="download('', 'audio')">
+                        <span>MP3 (Yüksek Kalite)</span>
+                        <button class="download-btn" onclick="downloadVideo('', 'audio')">
                             <i class="fas fa-download"></i> İndir
                         </button>
                     </div>
                 </div>
-            `;
+            </div>
+        `;
+    }
+
+    async function downloadVideo(formatId, type) {
+        if (!currentVideoInfo || !currentVideoInfo.url) {
+            showError('Önce bir video aramalısınız');
+            return;
         }
-        
-        // İndirme işlemi
-        async function download(formatId, type) {
-            const url = urlInput.value.trim();
+
+        try {
+            showLoading(`${type === 'audio' ? 'MP3' : 'Video'} indiriliyor...`);
             
-            try {
-                showLoading('İndiriliyor...');
-                
-                const response = await fetch('/api/download', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        url,
-                        type,
-                        format_id: formatId
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || 'İndirme başarısız');
-                }
-                
-                // Dosyayı indir
-                const a = document.createElement('a');
-                a.href = `/downloads/${encodeURIComponent(data.filename)}`;
-                a.download = data.filename;
-                a.click();
-                
-                // Geçmişe ekle
-                addToHistory(data.filename);
-                
-                showMessage('İndirme başarılı!');
-            } catch (error) {
-                showError(error.message);
+            const response = await fetch('/api/download', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    url: currentVideoInfo.url,
+                    type: type,
+                    format_id: formatId
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'İndirme başarısız');
             }
+
+            const data = await response.json();
+            startDownload(data.filename);
+            addToHistory(data.filename, currentVideoInfo.title);
+            
+            showMessage(`${type === 'audio' ? 'MP3' : 'Video'} başarıyla indirildi!`);
+        } catch (error) {
+            showError('İndirme hatası: ' + error.message);
+        } finally {
+            hideLoading();
         }
+    }
+
+    function startDownload(filename) {
+        const downloadUrl = `/downloads/${encodeURIComponent(filename)}`;
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Yardımcı Fonksiyonlar
+    function formatDuration(seconds) {
+        if (!seconds) return 'Bilinmiyor';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    function showLoading(message = 'Yükleniyor...') {
+        resultDiv.innerHTML = `
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>${message}</p>
+            </div>
+        `;
+    }
+
+    function hideLoading() {
+        const loadingElement = resultDiv.querySelector('.loading');
+        if (loadingElement) {
+            loadingElement.remove();
+        }
+    }
+
+    function showError(message) {
+        resultDiv.innerHTML = `
+            <div class="error">
+                <i class="fas fa-exclamation-circle"></i>
+                <span>${message}</span>
+            </div>
+        `;
+    }
+
+    function showMessage(message) {
+        const msgElement = document.createElement('div');
+        msgElement.className = 'message';
+        msgElement.innerHTML = `
+            <i class="fas fa-check-circle"></i>
+            <span>${message}</span>
+        `;
+        resultDiv.prepend(msgElement);
+        setTimeout(() => msgElement.remove(), 5000);
+    }
+
+    // Geçmiş İşlemleri
+    function loadDownloadHistory() {
+        const history = JSON.parse(localStorage.getItem('downloadHistory') || [];
+        historyList.innerHTML = history.map(item => `
+            <div class="history-item">
+                <span class="history-title">${item.title}</span>
+                <span class="history-filename">${item.filename}</span>
+                <span class="history-date">${new Date(item.date).toLocaleString()}</span>
+            </div>
+        `).join('');
+    }
+
+    function addToHistory(filename, title) {
+        const history = JSON.parse(localStorage.getItem('downloadHistory') || [];
         
-        // Yardımcı fonksiyonlar
-        function showLoading(message = 'Yükleniyor...') {
-            resultDiv.innerHTML = `<p><i class="fas fa-spinner fa-spin"></i> ${message}</p>`;
-        }
-        
-        function showError(message) {
-            resultDiv.innerHTML = `
-                <div style="color: var(--error); padding: 10px; background: #f8d7da; border-radius: 4px;">
-                    <i class="fas fa-exclamation-circle"></i> ${message}
-                </div>
-            `;
-        }
-        
-        function showMessage(message) {
-            resultDiv.innerHTML = `
-                <div style="color: var(--success); padding: 10px; background: #d4edda; border-radius: 4px;">
-                    <i class="fas fa-check-circle"></i> ${message}
-                </div>
-            `;
-        }
-        
-        function addToHistory(filename) {
-            const item = document.createElement('div');
-            item.className = 'history-item';
-            item.textContent = filename;
-            historyList.prepend(item);
-        }
-    </script>
+        history.unshift({
+            filename: filename,
+            title: title,
+            date: new Date().toISOString()
+        });
+
+        // Sadece son 10 kaydı tut
+        const limitedHistory = history.slice(0, MAX_HISTORY_ITEMS);
+        localStorage.setItem('downloadHistory', JSON.stringify(limitedHistory));
+        loadDownloadHistory();
+    }
+
+    // Global fonksiyonlar (HTML'den çağrılabilmesi için)
+    window.downloadVideo = downloadVideo;
+});
+</script>
 </body>
 </html>
